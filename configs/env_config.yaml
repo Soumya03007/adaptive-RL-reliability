@@ -27,7 +27,16 @@ traffic:
   volatility: [0.9, 1.2]
 
 tasks:
-  balanced: {}
+  balanced:
+    dynamics:
+      failure:
+        prob: 0.04
+        impact: [1.2, 1.8]
+    reward:
+      scale_action_weight: 0.01
+      action_change_weight: 0.02
+    traffic:
+      base: [0.15, 0.45]
 
   high_traffic:
     traffic:

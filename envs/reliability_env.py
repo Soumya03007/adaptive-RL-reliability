@@ -3,6 +3,8 @@ import numpy as np
 
 
 class ReliabilityEnv:
+    OBSERVATION_DIM = 8
+
     def __init__(self, config):
         self.cfg = config
         self.rng = random.Random()
@@ -114,9 +116,21 @@ class ReliabilityEnv:
     # -----------------------------
 
     def _get_obs(self):
-        return np.array([
-            self.latency,
-            self.cpu,
-            self.error_rate,
-            self.traffic
-        ], dtype=np.float32)
+        action_features = np.zeros(4, dtype=np.float32)
+        action_index = 3 if self.last_action is None else int(self.last_action)
+        action_features[action_index] = 1.0
+
+        return np.concatenate(
+            [
+                np.array(
+                    [
+                        self.latency,
+                        self.cpu,
+                        self.error_rate,
+                        self.traffic,
+                    ],
+                    dtype=np.float32,
+                ),
+                action_features,
+            ]
+        )

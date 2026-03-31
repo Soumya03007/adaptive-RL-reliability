@@ -21,6 +21,11 @@ def load_run_config(checkpoint_path: Path):
     return None
 
 
+def get_policy_obs_dim(checkpoint: dict) -> int:
+    weight = checkpoint["policy_state_dict"]["model.0.weight"]
+    return int(weight.shape[1])
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a saved PPO checkpoint.")
     parser.add_argument("checkpoint", type=Path, help="Path to a checkpoint such as best.pt")
@@ -48,8 +53,8 @@ def main():
 
     set_global_seed(args.seed)
 
-    policy_net = PolicyNet().to(device)
     checkpoint = torch.load(checkpoint_path, map_location=device)
+    policy_net = PolicyNet(obs_dim=get_policy_obs_dim(checkpoint)).to(device)
     policy_net.load_state_dict(checkpoint["policy_state_dict"])
 
     metrics = evaluate_policy(

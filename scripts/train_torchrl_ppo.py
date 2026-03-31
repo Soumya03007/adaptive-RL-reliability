@@ -1,5 +1,6 @@
 import sys
 import argparse
+import logging
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -31,6 +32,13 @@ from training.artifacts import (
 )
 from utils.seeding import set_global_seed
 
+logging.getLogger("torchrl").setLevel(logging.WARNING)
+
+
+def _get_policy_input_dim(policy_net):
+    first_layer = policy_net.model[0]
+    return int(first_layer.in_features)
+
 
 def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, seed=None):
     eval_env = ReliabilityEnv(env_config)
@@ -43,6 +51,7 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
     state_history = []
 
     policy_net.eval()
+    policy_input_dim = _get_policy_input_dim(policy_net)
     with torch.no_grad():
         for _ in range(episodes):
             obs = eval_env.reset()
@@ -50,7 +59,11 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
 
             for step in range(max_steps):
                 state_history.append(obs.copy())
-                obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
+                obs_tensor = torch.as_tensor(
+                    obs[:policy_input_dim],
+                    dtype=torch.float32,
+                    device=device,
+                )
                 action = torch.argmax(policy_net(obs_tensor), dim=-1).item()
                 obs, reward, done, _ = eval_env.step(action)
                 episode_return += reward
@@ -81,7 +94,8 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
 
 
 def summarize_rollout(data):
-    next_obs = data["next", "observation"].reshape(-1, 4).detach().cpu()
+    next_obs = data["next", "observation"].reshape(-1, data["next", "observation"].shape[-1]).detach().cpu()
+    state_obs = next_obs[:, :4]
     action_counts = torch.bincount(
         data["action"].reshape(-1).detach().cpu(),
         minlength=3,
@@ -89,10 +103,10 @@ def summarize_rollout(data):
 
     return {
         "reward_mean": data["next", "reward"].mean().item(),
-        "latency_mean": next_obs[:, 0].mean().item(),
-        "cpu_mean": next_obs[:, 1].mean().item(),
-        "error_mean": next_obs[:, 2].mean().item(),
-        "traffic_mean": next_obs[:, 3].mean().item(),
+        "latency_mean": state_obs[:, 0].mean().item(),
+        "cpu_mean": state_obs[:, 1].mean().item(),
+        "error_mean": state_obs[:, 2].mean().item(),
+        "traffic_mean": state_obs[:, 3].mean().item(),
         "action_counts": [int(count) for count in action_counts],
     }
 
@@ -129,8 +143,9 @@ def main(max_batches=None, run_name=None, task_name=None):
     base_env._set_seed(SEED)
     env = TransformedEnv(base_env, Compose([StepCounter(max_steps=MAX_STEPS)]))
 
-    policy_net = PolicyNet().to(device)
-    value_net = ValueNet().to(device)
+    obs_dim = env.observation_spec["observation"].shape[-1]
+    policy_net = PolicyNet(obs_dim=obs_dim).to(device)
+    value_net = ValueNet(obs_dim=obs_dim).to(device)
 
     policy_module = ProbabilisticActor(
         module=TensorDictModule(policy_net, ["observation"], ["logits"]),
