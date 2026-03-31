@@ -2,6 +2,7 @@ import torch
 from tensordict import TensorDict
 from torchrl.envs import EnvBase
 from torchrl.data import Categorical, Composite, Unbounded
+from envs.reliability_env import ReliabilityEnv
 
 class TorchRLEnvWrapper(EnvBase):
     def __init__(self, env, device="cpu"):
@@ -9,7 +10,7 @@ class TorchRLEnvWrapper(EnvBase):
         self.env = env
         self.observation_spec = Composite(
             observation=Unbounded(
-                shape=torch.Size([4]),
+                shape=torch.Size([ReliabilityEnv.OBS_SIZE]),
                 dtype=torch.float32,
                 device=self.device,
             ),

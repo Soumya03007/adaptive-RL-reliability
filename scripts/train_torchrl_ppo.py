@@ -1,11 +1,15 @@
 import sys
 import argparse
+import logging
+import math
+import random
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from torch.distributions import Categorical
 from torch.optim import Adam
 
@@ -32,6 +36,95 @@ from training.artifacts import (
 from utils.seeding import set_global_seed
 
 
+def clone_env_state(env):
+    cloned = ReliabilityEnv(env.cfg)
+    cloned.latency = env.latency
+    cloned.cpu = env.cpu
+    cloned.error_rate = env.error_rate
+    cloned.traffic = env.traffic
+    cloned.last_action = env.last_action
+    cloned.rng.setstate(env.rng.getstate())
+    return cloned
+
+
+def fallback_action(obs):
+    latency, cpu, error, _traffic = obs[:4]
+    previous_action = obs[4:]
+    last_action = int(np.argmax(previous_action)) if previous_action.sum() > 0 else 1
+
+    if error > 0.02 or latency > 0.45:
+        return 2
+    if cpu > 0.9 and latency < 0.4 and error < 0.01:
+        return 0
+    return last_action if last_action != 1 else 1
+
+
+def estimate_action_value(env, action, horizon=ORACLE_ROLLOUT_HORIZON, sims=ORACLE_ROLLOUT_SIMS):
+    total_value = 0.0
+
+    for _ in range(sims):
+        sim_env = clone_env_state(env)
+        obs, reward, done, _ = sim_env.step(action)
+        rollout_return = reward
+        steps = 1
+
+        while not done and steps < horizon:
+            rollout_action = fallback_action(obs)
+            obs, reward, done, _ = sim_env.step(rollout_action)
+            rollout_return += reward
+            steps += 1
+
+        total_value += rollout_return / steps
+
+    return total_value / sims
+
+
+def oracle_action(env):
+    return max(range(3), key=lambda action: estimate_action_value(env, action))
+
+
+def warm_start_policy(policy_net, env_config, device):
+    if PRETRAIN_SAMPLES <= 0 or PRETRAIN_EPOCHS <= 0:
+        return
+
+    demo_env = ReliabilityEnv(env_config)
+    demo_env.seed(SEED)
+
+    observations = []
+    actions = []
+
+    while len(observations) < PRETRAIN_SAMPLES:
+        demo_env.reset()
+
+        for _ in range(MAX_STEPS):
+            observations.append(demo_env._get_obs().copy())
+            action = oracle_action(demo_env)
+            actions.append(action)
+
+            step_action = action if random.random() < 0.7 else random.randrange(3)
+            _, _, done, _ = demo_env.step(step_action)
+
+            if done or len(observations) >= PRETRAIN_SAMPLES:
+                break
+
+    obs_tensor = torch.as_tensor(np.asarray(observations), dtype=torch.float32, device=device)
+    action_tensor = torch.as_tensor(actions, dtype=torch.long, device=device)
+    optimizer = Adam(policy_net.parameters(), lr=PRETRAIN_LR)
+
+    policy_net.train()
+    for _ in range(PRETRAIN_EPOCHS):
+        permutation = torch.randperm(len(obs_tensor), device=device)
+
+        for start in range(0, len(obs_tensor), PRETRAIN_BATCH_SIZE):
+            indices = permutation[start:start + PRETRAIN_BATCH_SIZE]
+            logits = policy_net(obs_tensor[indices])
+            loss = F.cross_entropy(logits, action_tensor[indices])
+
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+
+
 def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, seed=None):
     eval_env = ReliabilityEnv(env_config)
     if seed is not None:
@@ -49,10 +142,10 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
             episode_return = 0.0
 
             for step in range(max_steps):
-                state_history.append(obs.copy())
                 obs_tensor = torch.as_tensor(obs, dtype=torch.float32, device=device)
                 action = torch.argmax(policy_net(obs_tensor), dim=-1).item()
                 obs, reward, done, _ = eval_env.step(action)
+                state_history.append(obs.copy())
                 episode_return += reward
 
                 if done:
@@ -81,7 +174,7 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
 
 
 def summarize_rollout(data):
-    next_obs = data["next", "observation"].reshape(-1, 4).detach().cpu()
+    next_obs = data["next", "observation"].reshape(-1, ReliabilityEnv.OBS_SIZE).detach().cpu()
     action_counts = torch.bincount(
         data["action"].reshape(-1).detach().cpu(),
         minlength=3,
@@ -98,6 +191,7 @@ def summarize_rollout(data):
 
 
 def main(max_batches=None, run_name=None, task_name=None):
+    logging.getLogger("torchrl").setLevel(logging.WARNING)
     device = torch.device(DEVICE)
     set_global_seed(SEED)
     selected_task = task_name or get_default_task_name()
@@ -105,6 +199,14 @@ def main(max_batches=None, run_name=None, task_name=None):
     train_config = {
         "seed": SEED,
         "task_name": selected_task,
+        "observation_size": ReliabilityEnv.OBS_SIZE,
+        "pretrain_samples": PRETRAIN_SAMPLES,
+        "pretrain_epochs": PRETRAIN_EPOCHS,
+        "pretrain_batch_size": PRETRAIN_BATCH_SIZE,
+        "pretrain_lr": PRETRAIN_LR,
+        "warmstart_freeze_batches": WARMSTART_FREEZE_BATCHES,
+        "oracle_rollout_horizon": ORACLE_ROLLOUT_HORIZON,
+        "oracle_rollout_sims": ORACLE_ROLLOUT_SIMS,
         "device": DEVICE,
         "lr": LR,
         "batch_size": BATCH_SIZE,
@@ -131,6 +233,7 @@ def main(max_batches=None, run_name=None, task_name=None):
 
     policy_net = PolicyNet().to(device)
     value_net = ValueNet().to(device)
+    warm_start_policy(policy_net, env_config, device)
 
     policy_module = ProbabilisticActor(
         module=TensorDictModule(policy_net, ["observation"], ["logits"]),
@@ -166,21 +269,24 @@ def main(max_batches=None, run_name=None, task_name=None):
         batch = data.reshape(-1)
         buffer = build_buffer(len(batch))
         buffer.extend(batch.cpu())
+        minibatches_per_epoch = max(1, math.ceil(len(batch) / BATCH_SIZE))
 
-        for _ in range(PPO_EPOCHS):
-            subdata = buffer.sample(min(BATCH_SIZE, len(buffer))).to(device)
-            loss_vals = loss_module(subdata)
-            loss = (
-                loss_vals["loss_objective"]
-                + loss_vals["loss_critic"]
-                + loss_vals["loss_entropy"]
-            )
+        if i >= WARMSTART_FREEZE_BATCHES:
+            for _ in range(PPO_EPOCHS):
+                for _ in range(minibatches_per_epoch):
+                    subdata = buffer.sample(min(BATCH_SIZE, len(buffer))).to(device)
+                    loss_vals = loss_module(subdata)
+                    loss = (
+                        loss_vals["loss_objective"]
+                        + loss_vals["loss_critic"]
+                        + loss_vals["loss_entropy"]
+                    )
 
-            optimizer.zero_grad()
-            loss.backward()
-            torch.nn.utils.clip_grad_norm_(policy_net.parameters(), GRAD_CLIP_NORM)
-            torch.nn.utils.clip_grad_norm_(value_net.parameters(), GRAD_CLIP_NORM)
-            optimizer.step()
+                    optimizer.zero_grad()
+                    loss.backward()
+                    torch.nn.utils.clip_grad_norm_(policy_net.parameters(), GRAD_CLIP_NORM)
+                    torch.nn.utils.clip_grad_norm_(value_net.parameters(), GRAD_CLIP_NORM)
+                    optimizer.step()
 
         rollout_metrics = summarize_rollout(data)
         reward = rollout_metrics["reward_mean"]

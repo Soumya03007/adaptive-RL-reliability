@@ -1,0 +1,98 @@
+{
+  "train_config": {
+    "seed": 42,
+    "task_name": "balanced",
+    "observation_size": 7,
+    "pretrain_samples": 1500,
+    "pretrain_epochs": 20,
+    "pretrain_batch_size": 128,
+    "oracle_rollout_horizon": 4,
+    "oracle_rollout_sims": 6,
+    "device": "cpu",
+    "lr": 0.0001,
+    "batch_size": 256,
+    "ppo_epochs": 10,
+    "frames_per_batch": 4000,
+    "total_frames": 240000,
+    "max_steps": 50,
+    "eval_interval": 5,
+    "eval_episodes": 20,
+    "checkpoint_interval": 10,
+    "clip_epsilon": 0.2,
+    "entropy_coeff": 0.01,
+    "critic_coeff": 0.5,
+    "grad_clip_norm": 1.0
+  },
+  "env_config": {
+    "dynamics": {
+      "latency_scale_up": [
+        0.5,
+        0.8
+      ],
+      "latency_scale_down": [
+        1.2,
+        1.6
+      ],
+      "cpu_scale_up": [
+        1.1,
+        1.4
+      ],
+      "cpu_scale_down": [
+        0.7,
+        1.0
+      ],
+      "noise": {
+        "latency": [
+          0.9,
+          1.2
+        ],
+        "cpu": [
+          0.9,
+          1.1
+        ]
+      },
+      "failure": {
+        "prob": 0.04,
+        "impact": [
+          1.2,
+          1.8
+        ]
+      },
+      "recovery": {
+        "error_base": [
+          0.96,
+          1.0
+        ],
+        "error_no_op": [
+          0.92,
+          0.99
+        ],
+        "error_scale_up": [
+          0.64,
+          0.82
+        ],
+        "error_scale_down": [
+          0.98,
+          1.05
+        ]
+      }
+    },
+    "reward": {
+      "latency_weight": 3.0,
+      "error_weight": 5.0,
+      "cpu_weight": 1.0,
+      "scale_action_weight": 0.03,
+      "action_change_weight": 0.08
+    },
+    "traffic": {
+      "base": [
+        0.3,
+        0.7
+      ],
+      "volatility": [
+        0.9,
+        1.2
+      ]
+    }
+  }
+}

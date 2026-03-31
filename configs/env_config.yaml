@@ -15,6 +15,12 @@ dynamics:
     prob: 0.1
     impact: [1.5, 2.5]
 
+  recovery:
+    error_base: [0.96, 1.0]
+    error_no_op: [0.92, 0.99]
+    error_scale_up: [0.72, 0.9]
+    error_scale_down: [0.98, 1.05]
+
 reward:
   latency_weight: 3.0
   error_weight: 5.0
@@ -27,7 +33,13 @@ traffic:
   volatility: [0.9, 1.2]
 
 tasks:
-  balanced: {}
+  balanced:
+    dynamics:
+      failure:
+        prob: 0.04
+        impact: [1.2, 1.8]
+      recovery:
+        error_scale_up: [0.64, 0.82]
 
   high_traffic:
     traffic:

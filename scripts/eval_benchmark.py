@@ -9,12 +9,11 @@ import torch
 
 from configs.config import (
     BENCHMARK_SEEDS,
-    BENCHMARK_TASKS,
     DEVICE,
     EVAL_EPISODES,
     MAX_STEPS,
 )
-from configs.loader import load_env_config
+from configs.loader import list_task_names, load_env_config
 from models.policy import PolicyNet
 from scripts.train_torchrl_ppo import evaluate_policy
 from utils.seeding import set_global_seed
@@ -24,13 +23,17 @@ def parse_csv_arg(raw_value, cast):
     return [cast(part.strip()) for part in raw_value.split(",") if part.strip()]
 
 
+def score_in_unit_interval(score):
+    return 0.0 <= score <= 1.0
+
+
 def main():
     parser = argparse.ArgumentParser(description="Evaluate a checkpoint across multiple tasks and seeds.")
     parser.add_argument("checkpoint", type=Path, help="Path to a checkpoint such as best.pt")
     parser.add_argument(
         "--tasks",
-        default=",".join(BENCHMARK_TASKS),
-        help="Comma-separated task variants to evaluate",
+        default="all",
+        help="Comma-separated task variants to evaluate, or 'all' to enumerate the task catalog",
     )
     parser.add_argument(
         "--seeds",
@@ -46,7 +49,7 @@ def main():
     if not checkpoint_path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
-    tasks = parse_csv_arg(args.tasks, str)
+    tasks = list_task_names() if args.tasks.strip().lower() == "all" else parse_csv_arg(args.tasks, str)
     seeds = parse_csv_arg(args.seeds, int)
     device = torch.device(args.device)
 
@@ -61,6 +64,7 @@ def main():
 
     print(f"Checkpoint {checkpoint_path}")
     print(f"Iteration {checkpoint.get('iteration', 'unknown')}")
+    print(f"Tasks {', '.join(tasks)}")
 
     for task_name in tasks:
         seed_scores = []
@@ -74,13 +78,18 @@ def main():
                 max_steps=args.max_steps,
                 seed=seed,
             )
-            seed_scores.append(metrics["grader_score_mean"])
+            grader_score = metrics["grader_score_mean"]
+            seed_scores.append(grader_score)
+            all_scores.append(grader_score)
+            range_ok = score_in_unit_interval(grader_score)
+            status = "OK" if range_ok else "OUT_OF_RANGE"
             print(
                 " | ".join(
                     [
                         f"Task {task_name}",
                         f"Seed {seed}",
-                        f"GraderScore {metrics['grader_score_mean']:.3f}",
+                        f"GraderScore {grader_score:.3f}",
+                        f"Range {status}",
                         f"EvalLen {metrics['episode_length_mean']:.1f}",
                         (
                             "EvalState "
@@ -93,20 +102,28 @@ def main():
             )
 
         task_scores[task_name] = seed_scores
-        all_scores.extend(seed_scores)
 
     print("\nTask Summary")
     for task_name, seed_scores in task_scores.items():
+        task_mean = statistics.mean(seed_scores)
+        task_std = statistics.pstdev(seed_scores)
+        status = "OK" if all(score_in_unit_interval(score) for score in seed_scores) else "OUT_OF_RANGE"
         print(
-            f"{task_name}: mean={statistics.mean(seed_scores):.3f} "
-            f"std={statistics.pstdev(seed_scores):.3f}"
+            f"{task_name}: mean={task_mean:.3f} "
+            f"std={task_std:.3f} "
+            f"range={status}"
         )
 
+    overall_ok = all(score_in_unit_interval(score) for score in all_scores)
     print(
         "\nOverall "
         f"mean={statistics.mean(all_scores):.3f} "
-        f"std={statistics.pstdev(all_scores):.3f}"
+        f"std={statistics.pstdev(all_scores):.3f} "
+        f"range={'OK' if overall_ok else 'OUT_OF_RANGE'}"
     )
+
+    if not overall_ok:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

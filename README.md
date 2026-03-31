@@ -18,6 +18,7 @@ Observation space:
 - `cpu`
 - `error_rate`
 - `traffic`
+- `previous_action_one_hot[3]`
 
 Action space:
 
@@ -42,6 +43,9 @@ The reward is computed from a weighted penalty over:
 - latency
 - error rate
 - cpu usage
+
+The default dynamics also include action-dependent recovery, so scaling up under stress can reduce accumulated error instead of only trading latency for CPU.
+The previous action is included in the observation so the policy can reason about switch penalties without partial observability.
 
 Then normalized as:
 
@@ -139,6 +143,7 @@ Good signs:
 - `GraderScore` trends upward
 - `EvalLen` increases
 - `EvalState` latency and error decrease
+- `Act` becomes more selective instead of oscillating between scaling decisions
 
 ## Suggested Hackathon Reporting
 

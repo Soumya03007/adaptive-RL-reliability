@@ -3,6 +3,8 @@ import numpy as np
 
 
 class ReliabilityEnv:
+    OBS_SIZE = 7
+
     def __init__(self, config):
         self.cfg = config
         self.rng = random.Random()
@@ -34,6 +36,7 @@ class ReliabilityEnv:
         self._apply_traffic()
         self._apply_noise()
         self._apply_failures()
+        self._apply_recovery(action)
         self._clamp_state()
 
         reward = self._compute_reward(action, previous_action)
@@ -81,6 +84,22 @@ class ReliabilityEnv:
             self.latency *= impact
             self.error_rate += 0.2
 
+    def _apply_recovery(self, action):
+        recovery_cfg = self.cfg["dynamics"].get("recovery", {})
+        base = recovery_cfg.get("error_base", [0.96, 1.0])
+        scale_up = recovery_cfg.get("error_scale_up", [0.72, 0.9])
+        no_op = recovery_cfg.get("error_no_op", base)
+        scale_down = recovery_cfg.get("error_scale_down", [0.98, 1.05])
+
+        if action == 2:
+            factor = self.rng.uniform(*scale_up)
+        elif action == 1:
+            factor = self.rng.uniform(*no_op)
+        else:
+            factor = self.rng.uniform(*scale_down)
+
+        self.error_rate *= factor
+
     def _clamp_state(self):
         self.latency = float(np.clip(self.latency, 0.0, 2.0))
         self.cpu = float(np.clip(self.cpu, 0.0, 2.0))
@@ -114,9 +133,17 @@ class ReliabilityEnv:
     # -----------------------------
 
     def _get_obs(self):
-        return np.array([
-            self.latency,
-            self.cpu,
-            self.error_rate,
-            self.traffic
-        ], dtype=np.float32)
+        last_action = np.zeros(3, dtype=np.float32)
+        if self.last_action is not None:
+            last_action[self.last_action] = 1.0
+
+        return np.array(
+            [
+                self.latency,
+                self.cpu,
+                self.error_rate,
+                self.traffic,
+                *last_action,
+            ],
+            dtype=np.float32,
+        )
