@@ -1,0 +1,65 @@
+{
+  "train_config": {
+    "seed": 42,
+    "device": "cpu",
+    "lr": 0.0003,
+    "batch_size": 128,
+    "ppo_epochs": 12,
+    "max_steps": 50,
+    "eval_interval": 5,
+    "eval_episodes": 5,
+    "checkpoint_interval": 10
+  },
+  "env_config": {
+    "dynamics": {
+      "latency_scale_up": [
+        0.5,
+        0.8
+      ],
+      "latency_scale_down": [
+        1.2,
+        1.6
+      ],
+      "cpu_scale_up": [
+        1.1,
+        1.4
+      ],
+      "cpu_scale_down": [
+        0.7,
+        1.0
+      ],
+      "noise": {
+        "latency": [
+          0.9,
+          1.2
+        ],
+        "cpu": [
+          0.9,
+          1.1
+        ]
+      },
+      "failure": {
+        "prob": 0.1,
+        "impact": [
+          1.5,
+          2.5
+        ]
+      }
+    },
+    "reward": {
+      "latency_weight": 3.0,
+      "error_weight": 5.0,
+      "cpu_weight": 1.0
+    },
+    "traffic": {
+      "base": [
+        0.3,
+        0.7
+      ],
+      "volatility": [
+        0.9,
+        1.2
+      ]
+    }
+  }
+}

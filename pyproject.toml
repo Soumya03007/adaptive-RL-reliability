@@ -1,0 +1,16 @@
+[project]
+name = "adaptive-rl-reliability"
+version = "0.1.0"
+description = "Adaptive reinforcement learning experiments for reliability control."
+requires-python = ">=3.12"
+dependencies = [
+    "torch>=2.11.0",
+    "tensordict>=0.11.0",
+    "torchrl>=0.11.1",
+]
+
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+include = ["envs", "models", "scripts", "training", "utils", "tests"]
+extraPaths = ["."]
