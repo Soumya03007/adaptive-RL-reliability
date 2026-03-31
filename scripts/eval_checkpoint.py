@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import torch
 
-from configs.config import DEVICE, EVAL_EPISODES, MAX_STEPS, SEED
+from configs.config import DEFAULT_TASK, DEVICE, EVAL_EPISODES, MAX_STEPS, SEED
 from configs.loader import load_env_config
 from models.policy import PolicyNet
 from scripts.train_torchrl_ppo import evaluate_policy
@@ -28,6 +28,7 @@ def main():
     parser.add_argument("--max-steps", type=int, default=MAX_STEPS, help="Maximum steps per episode")
     parser.add_argument("--seed", type=int, default=SEED + 1000, help="Evaluation seed")
     parser.add_argument("--device", default=DEVICE, help="Torch device to use")
+    parser.add_argument("--task", default=None, help="Optional task variant override")
     args = parser.parse_args()
 
     checkpoint_path = args.checkpoint.resolve()
@@ -35,7 +36,14 @@ def main():
         raise FileNotFoundError(f"Checkpoint not found: {checkpoint_path}")
 
     run_config = load_run_config(checkpoint_path)
-    env_config = run_config["env_config"] if run_config else load_env_config()
+    if args.task:
+        task_name = args.task
+    elif run_config and "train_config" in run_config:
+        task_name = run_config["train_config"].get("task_name", DEFAULT_TASK)
+    else:
+        task_name = DEFAULT_TASK
+
+    env_config = load_env_config(task_name)
     device = torch.device(args.device)
 
     set_global_seed(args.seed)
@@ -55,6 +63,7 @@ def main():
 
     print(f"Checkpoint {checkpoint_path}")
     print(f"Iteration {checkpoint.get('iteration', 'unknown')}")
+    print(f"Task {task_name}")
     print(
         " | ".join(
             [

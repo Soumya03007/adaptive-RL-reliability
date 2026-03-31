@@ -1,5 +1,8 @@
 DEVICE = "cpu"
 SEED = 42
+DEFAULT_TASK = "balanced"
+BENCHMARK_TASKS = ("balanced", "high_traffic", "failure_heavy", "cost_sensitive")
+BENCHMARK_SEEDS = (1042, 1043, 1044)
 
 LR = 1e-4
 BATCH_SIZE = 256

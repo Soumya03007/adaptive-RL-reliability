@@ -1,4 +1,5 @@
 import sys
+import argparse
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -14,7 +15,7 @@ from torchrl.envs.transforms import Compose, StepCounter
 from torchrl.modules import ProbabilisticActor, ValueOperator
 
 from configs.config import *
-from configs.loader import load_env_config
+from configs.loader import get_default_task_name, load_env_config
 from envs.reliability_env import ReliabilityEnv
 from envs.torchrl_env import TorchRLEnvWrapper
 from models.policy import PolicyNet
@@ -96,12 +97,14 @@ def summarize_rollout(data):
     }
 
 
-def main(max_batches=None, run_name=None):
+def main(max_batches=None, run_name=None, task_name=None):
     device = torch.device(DEVICE)
     set_global_seed(SEED)
-    env_config = load_env_config()
+    selected_task = task_name or get_default_task_name()
+    env_config = load_env_config(selected_task)
     train_config = {
         "seed": SEED,
+        "task_name": selected_task,
         "device": DEVICE,
         "lr": LR,
         "batch_size": BATCH_SIZE,
@@ -289,4 +292,10 @@ def main(max_batches=None, run_name=None):
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="Train PPO on the reliability environment.")
+    parser.add_argument("--run-name", default=None, help="Optional name for the output run directory")
+    parser.add_argument("--max-batches", type=int, default=None, help="Optional limit for smoke tests")
+    parser.add_argument("--task", default=DEFAULT_TASK, help="Task variant to train on")
+    args = parser.parse_args()
+
+    main(max_batches=args.max_batches, run_name=args.run_name, task_name=args.task)

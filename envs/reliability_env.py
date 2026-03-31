@@ -11,6 +11,8 @@ class ReliabilityEnv:
             reward_cfg["latency_weight"] * 2.0
             + reward_cfg["error_weight"] * 1.0
             + reward_cfg["cpu_weight"] * 2.0
+            + reward_cfg.get("scale_action_weight", 0.0)
+            + reward_cfg.get("action_change_weight", 0.0)
         )
         self.reset()
 
@@ -23,17 +25,20 @@ class ReliabilityEnv:
         self.cpu = self.rng.uniform(0.3, 0.6)
         self.error_rate = self.rng.uniform(0.0, 0.1)
         self.traffic = self.rng.uniform(*self.cfg["traffic"]["base"])
+        self.last_action = None
         return self._get_obs()
 
     def step(self, action):
+        previous_action = self.last_action
         self._apply_action(action)
         self._apply_traffic()
         self._apply_noise()
         self._apply_failures()
         self._clamp_state()
 
-        reward = self._compute_reward()
+        reward = self._compute_reward(action, previous_action)
         done = self.latency >= 2.0 or self.cpu >= 2.0 or self.error_rate >= 1.0
+        self.last_action = action
 
         return self._get_obs(), reward, done, {}
 
@@ -86,7 +91,7 @@ class ReliabilityEnv:
     # Reward
     # -----------------------------
 
-    def _compute_reward(self):
+    def _compute_reward(self, action, previous_action):
         r_cfg = self.cfg["reward"]
 
         penalty = (
@@ -94,6 +99,12 @@ class ReliabilityEnv:
             + r_cfg["error_weight"] * self.error_rate
             + r_cfg["cpu_weight"] * self.cpu
         )
+
+        if action in (0, 2):
+            penalty += r_cfg.get("scale_action_weight", 0.0)
+
+        if previous_action is not None and action != previous_action:
+            penalty += r_cfg.get("action_change_weight", 0.0)
 
         reward = 1.0 - (penalty / self.max_penalty)
         return float(np.clip(reward, 0.0, 1.0))
