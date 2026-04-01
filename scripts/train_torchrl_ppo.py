@@ -17,7 +17,9 @@ from torchrl.modules import ProbabilisticActor, ValueOperator
 
 from configs.config import *
 from configs.loader import get_default_task_name, load_env_config
+from envs.graders import EpisodeMetrics, grade_episode
 from envs.reliability_env import ReliabilityEnv
+from envs.tasks import get_task_spec
 from envs.torchrl_env import TorchRLEnvWrapper
 from models.policy import PolicyNet
 from models.value import ValueNet
@@ -40,13 +42,24 @@ def _get_policy_input_dim(policy_net):
     return int(first_layer.in_features)
 
 
-def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, seed=None):
+def evaluate_policy(
+    policy_net,
+    env_config,
+    device,
+    episodes=5,
+    max_steps=50,
+    seed=None,
+    task_name=None,
+):
     eval_env = ReliabilityEnv(env_config)
     if seed is not None:
         eval_env.seed(seed)
 
+    task_spec = get_task_spec(task_name) if task_name is not None else None
     returns = []
     grader_scores = []
+    task_grader_scores = []
+    task_completion_flags = []
     episode_lengths = []
     state_history = []
 
@@ -56,9 +69,12 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
         for _ in range(episodes):
             obs = eval_env.reset()
             episode_return = 0.0
+            episode_states = []
+            terminated = False
 
             for step in range(max_steps):
                 state_history.append(obs.copy())
+                episode_states.append(obs.copy())
                 obs_tensor = torch.as_tensor(
                     obs[:policy_input_dim],
                     dtype=torch.float32,
@@ -70,21 +86,44 @@ def evaluate_policy(policy_net, env_config, device, episodes=5, max_steps=50, se
 
                 if done:
                     episode_lengths.append(step + 1)
+                    terminated = True
                     break
             else:
                 episode_lengths.append(max_steps)
 
             returns.append(episode_return)
             grader_scores.append(episode_return / episode_lengths[-1])
+            if task_spec is not None:
+                episode_array = np.asarray(episode_states, dtype=np.float32)
+                episode_metrics = EpisodeMetrics(
+                    episode_length=episode_lengths[-1],
+                    mean_reward=episode_return / episode_lengths[-1],
+                    avg_latency=float(np.mean(episode_array[:, 0])),
+                    avg_cpu=float(np.mean(episode_array[:, 1])),
+                    avg_error=float(np.mean(episode_array[:, 2])),
+                    avg_traffic=float(np.mean(episode_array[:, 3])),
+                    terminated=terminated,
+                )
+                episode_grade = grade_episode(task_spec, episode_metrics)
+                task_grader_scores.append(episode_grade.grader_score)
+                task_completion_flags.append(float(episode_grade.completed))
 
     policy_net.train()
 
     state_means = np.mean(np.asarray(state_history, dtype=np.float32), axis=0)
+    task_grader_score_mean = (
+        float(np.mean(task_grader_scores)) if task_grader_scores else 0.0
+    )
+    task_completion_rate = (
+        float(np.mean(task_completion_flags)) if task_completion_flags else 0.0
+    )
     return {
         "return_mean": float(np.mean(returns)),
         "return_std": float(np.std(returns)),
         "grader_score_mean": float(np.mean(grader_scores)),
         "grader_score_std": float(np.std(grader_scores)),
+        "task_grader_score_mean": task_grader_score_mean,
+        "task_completion_rate": task_completion_rate,
         "episode_length_mean": float(np.mean(episode_lengths)),
         "latency_mean": float(state_means[0]),
         "cpu_mean": float(state_means[1]),
@@ -209,6 +248,7 @@ def main(max_batches=None, run_name=None, task_name=None):
                 episodes=EVAL_EPISODES,
                 max_steps=MAX_STEPS,
                 seed=SEED + 1000,
+                task_name=selected_task,
             )
 
             metrics_row = {
@@ -226,6 +266,8 @@ def main(max_batches=None, run_name=None, task_name=None):
                 "eval_return_std": eval_metrics["return_std"],
                 "grader_score_mean": eval_metrics["grader_score_mean"],
                 "grader_score_std": eval_metrics["grader_score_std"],
+                "task_grader_score_mean": eval_metrics["task_grader_score_mean"],
+                "task_completion_rate": eval_metrics["task_completion_rate"],
                 "eval_episode_length_mean": eval_metrics["episode_length_mean"],
                 "eval_latency": eval_metrics["latency_mean"],
                 "eval_cpu": eval_metrics["cpu_mean"],
@@ -239,6 +281,8 @@ def main(max_batches=None, run_name=None, task_name=None):
                 "train_reward_ema": running_reward,
                 "grader_score_mean": eval_metrics["grader_score_mean"],
                 "grader_score_std": eval_metrics["grader_score_std"],
+                "task_grader_score_mean": eval_metrics["task_grader_score_mean"],
+                "task_completion_rate": eval_metrics["task_completion_rate"],
                 "eval_episode_length_mean": eval_metrics["episode_length_mean"],
             }
             save_checkpoint(
@@ -288,6 +332,11 @@ def main(max_batches=None, run_name=None, task_name=None):
                             "GraderScore "
                             f"{eval_metrics['grader_score_mean']:.3f}"
                             f"+/-{eval_metrics['grader_score_std']:.3f}"
+                        ),
+                        (
+                            "TaskPass "
+                            f"{eval_metrics['task_completion_rate']:.2%}"
+                            f" | TaskScore {eval_metrics['task_grader_score_mean']:.3f}"
                         ),
                         (
                             "EvalState "

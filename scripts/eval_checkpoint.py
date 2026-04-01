@@ -64,6 +64,7 @@ def main():
         episodes=args.episodes,
         max_steps=args.max_steps,
         seed=args.seed,
+        task_name=task_name,
     )
 
     print(f"Checkpoint {checkpoint_path}")
@@ -73,6 +74,8 @@ def main():
         " | ".join(
             [
                 f"GraderScore {metrics['grader_score_mean']:.3f}+/-{metrics['grader_score_std']:.3f}",
+                f"TaskPass {metrics['task_completion_rate']:.2%}",
+                f"TaskScore {metrics['task_grader_score_mean']:.3f}",
                 f"EvalLen {metrics['episode_length_mean']:.1f}",
                 (
                     "EvalState "

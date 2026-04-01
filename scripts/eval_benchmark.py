@@ -73,6 +73,7 @@ def main():
                 episodes=args.episodes,
                 max_steps=args.max_steps,
                 seed=seed,
+                task_name=task_name,
             )
             seed_scores.append(metrics["grader_score_mean"])
             print(
@@ -81,6 +82,8 @@ def main():
                         f"Task {task_name}",
                         f"Seed {seed}",
                         f"GraderScore {metrics['grader_score_mean']:.3f}",
+                        f"TaskPass {metrics['task_completion_rate']:.2%}",
+                        f"TaskScore {metrics['task_grader_score_mean']:.3f}",
                         f"EvalLen {metrics['episode_length_mean']:.1f}",
                         (
                             "EvalState "

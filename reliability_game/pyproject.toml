@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "openenv-reliability_game"
+version = "0.1.0"
+description = "Reliability mini-game environment packaged for OpenEnv."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=2.0.0",
+    "openenv-core[core]>=0.2.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+]
+
+[project.scripts]
+server = "reliability_game.server.app:main"
+
+[tool.setuptools]
+include-package-data = true
+packages = ["reliability_game", "reliability_game.server"]
+package-dir = { "reliability_game" = ".", "reliability_game.server" = "server" }
