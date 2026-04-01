@@ -1,0 +1,153 @@
+{
+  "episodes_per_task": 5,
+  "base_seed": 42,
+  "tasks": [
+    "balanced",
+    "high_traffic",
+    "failure_heavy"
+  ],
+  "task_summaries": {
+    "balanced": {
+      "mean": 0.8729018253866855,
+      "min": 0.8451370781329222,
+      "max": 0.9006500333216017
+    },
+    "high_traffic": {
+      "mean": 0.8186218255401952,
+      "min": 0.7878215192932057,
+      "max": 0.8684087899686934
+    },
+    "failure_heavy": {
+      "mean": 0.7626200203262382,
+      "min": 0.739932094137584,
+      "max": 0.7978259776763367
+    }
+  },
+  "overall": {
+    "mean": 0.8180478904177063,
+    "min": 0.739932094137584,
+    "max": 0.9006500333216017
+  },
+  "rows": [
+    {
+      "task_id": "balanced",
+      "seed": 42,
+      "score": 0.8451370781329222,
+      "episode_return": 16.62655183689726,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "balanced",
+      "seed": 43,
+      "score": 0.9006500333216017,
+      "episode_return": 16.77879492371563,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "balanced",
+      "seed": 44,
+      "score": 0.864681920128611,
+      "episode_return": 16.81305687038594,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "balanced",
+      "seed": 45,
+      "score": 0.8756400168470558,
+      "episode_return": 16.79631410320556,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "balanced",
+      "seed": 46,
+      "score": 0.8784000785032366,
+      "episode_return": 16.516166078349872,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "seed": 142,
+      "score": 0.8135039636734642,
+      "episode_return": 20.197055645665067,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "seed": 143,
+      "score": 0.8286122326121489,
+      "episode_return": 18.815391045669198,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "seed": 144,
+      "score": 0.7947626221534643,
+      "episode_return": 20.169578288304226,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "seed": 145,
+      "score": 0.8684087899686934,
+      "episode_return": 19.872422626781713,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "seed": 146,
+      "score": 0.7878215192932057,
+      "episode_return": 20.087209469461396,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "seed": 242,
+      "score": 0.7556489905618122,
+      "episode_return": 24.05870580127106,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "seed": 243,
+      "score": 0.7544205156288815,
+      "episode_return": 23.955077542595113,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "seed": 244,
+      "score": 0.739932094137584,
+      "episode_return": 23.51583211877141,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "seed": 245,
+      "score": 0.7978259776763367,
+      "episode_return": 23.16767699384099,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "seed": 246,
+      "score": 0.7652725236265766,
+      "episode_return": 23.652623753123784,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    }
+  ]
+}
