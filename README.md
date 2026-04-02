@@ -188,6 +188,27 @@ Or manually push this repo to a Docker Space on Hugging Face.
 
 ## Baselines
 
+### Submission inference script
+
+The submission-facing inference entrypoint is the root-level `inference.py`.
+
+It uses the `openai` Python client, reads the required validator variables, and emits only the structured stdout lines expected by the evaluator:
+
+```powershell
+python inference.py
+```
+
+Required environment variables:
+- `API_BASE_URL`
+- `MODEL_NAME`
+- `HF_TOKEN`
+
+Optional environment variables:
+- `TASKS`
+- `BASE_SEED`
+- `REQUEST_TIMEOUT`
+- `INFERENCE_OUTPUT`
+
 ### Deterministic local rule baseline
 
 Checked locally with:
