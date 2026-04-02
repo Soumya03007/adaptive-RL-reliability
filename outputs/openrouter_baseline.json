@@ -1,0 +1,85 @@
+{
+  "provider": "openrouter",
+  "model": "qwen/qwen3.6-plus-preview:free",
+  "fallback_models": [],
+  "episodes_per_task": 2,
+  "base_seed": 42,
+  "tasks": [
+    "balanced",
+    "high_traffic",
+    "failure_heavy"
+  ],
+  "task_summaries": {
+    "balanced": {
+      "mean": 0.9854418416825848,
+      "min": 0.9778687224794327,
+      "max": 0.9930149608857367
+    },
+    "high_traffic": {
+      "mean": 0.9143811227701524,
+      "min": 0.9041657692804025,
+      "max": 0.9245964762599024
+    },
+    "failure_heavy": {
+      "mean": 0.8103546952177556,
+      "min": 0.7282780648443695,
+      "max": 0.8924313255911418
+    }
+  },
+  "overall": {
+    "mean": 0.9033925532234975,
+    "min": 0.7282780648443695,
+    "max": 0.9930149608857367
+  },
+  "rows": [
+    {
+      "task_id": "balanced",
+      "episode_seed": 42,
+      "score": 0.9778687224794327,
+      "episode_return": 15.070927430018763,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "balanced",
+      "episode_seed": 43,
+      "score": 0.9930149608857367,
+      "episode_return": 15.556278662044011,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "episode_seed": 142,
+      "score": 0.9041657692804025,
+      "episode_return": 19.227436041072792,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "high_traffic",
+      "episode_seed": 143,
+      "score": 0.9245964762599024,
+      "episode_return": 18.71833909326247,
+      "steps": 22,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "episode_seed": 242,
+      "score": 0.8924313255911418,
+      "episode_return": 21.938288399055573,
+      "steps": 26,
+      "terminated_reason": "max_steps_reached"
+    },
+    {
+      "task_id": "failure_heavy",
+      "episode_seed": 243,
+      "score": 0.7282780648443695,
+      "episode_return": 14.67318252470618,
+      "steps": 20,
+      "terminated_reason": "cpu_limit"
+    }
+  ],
+  "status": "completed"
+}

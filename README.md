@@ -121,7 +121,7 @@ Relevant files:
 - `openenv_tasks.py`: task definitions and deterministic graders
 - `server/live_system_environment.py`: OpenEnv environment wrapper
 - `server/app.py`: FastAPI app for OpenEnv
-- `scripts/run_openai_baseline.py`: OpenAI baseline runner
+- `scripts/run_hf_baseline.py`: Hugging Face Inference baseline runner
 - `scripts/run_rule_baseline.py`: deterministic local smoke baseline
 - `envs/reliability_env.py`: underlying service simulator
 - `scripts/train_torchrl_ppo.py`: existing PPO training pipeline
@@ -207,21 +207,28 @@ Observed scores:
 
 The JSON artifact is written to `outputs/rule_baseline.json`.
 
-### OpenAI baseline
+### Hugging Face baseline
 
-The required OpenAI baseline runner is implemented in:
+Use the OpenAI-client baseline against an OpenRouter-hosted instruct model with:
 
 ```powershell
-python scripts/run_openai_baseline.py --episodes 3
+python scripts/run_hf_baseline.py --episodes 1
 ```
 
 Requirements:
-- `OPENAI_API_KEY` must be set
-- optionally set `OPENAI_MODEL` to override the default model
+- `OPENROUTER_API_KEY` must be set
+- optionally set `OPENROUTER_MODEL`
+- optionally set `OPENROUTER_FALLBACK_MODELS`
 
-The script uses fixed episode seeds plus fixed model sampling settings to make runs reproducible, and writes results to `outputs/openai_baseline.json`.
+Default model:
 
-I could not execute this baseline in the current session because `OPENAI_API_KEY` was not available locally.
+```text
+nvidia/nemotron-3-super-120b-a12b:free
+```
+
+The baseline writes results to `outputs/openrouter_baseline.json`.
+
+The runner uses the `openai` Python client with OpenRouter's OpenAI-compatible `base_url`, retries temporary provider errors, checkpoints after each finished episode, and can fall back to backup models.
 
 ## Existing PPO training path
 

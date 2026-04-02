@@ -1,0 +1,33 @@
+{
+  "provider": "openrouter",
+  "model": "qwen/qwen3.6-plus-preview:free",
+  "fallback_models": [],
+  "episodes_per_task": 1,
+  "base_seed": 42,
+  "tasks": [
+    "balanced"
+  ],
+  "task_summaries": {
+    "balanced": {
+      "mean": 0.9931527696641642,
+      "min": 0.9931527696641642,
+      "max": 0.9931527696641642
+    }
+  },
+  "overall": {
+    "mean": 0.9931527696641642,
+    "min": 0.9931527696641642,
+    "max": 0.9931527696641642
+  },
+  "rows": [
+    {
+      "task_id": "balanced",
+      "episode_seed": 42,
+      "score": 0.9931527696641642,
+      "episode_return": 15.226544158459035,
+      "steps": 18,
+      "terminated_reason": "max_steps_reached"
+    }
+  ],
+  "status": "completed"
+}
