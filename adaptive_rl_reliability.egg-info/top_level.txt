@@ -2,7 +2,6 @@ agents
 client
 configs
 envs
-first_rl_demo
 inference
 models
 openenv_models
