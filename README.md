@@ -287,4 +287,4 @@ Evaluate a checkpoint:
 
 ```powershell
 uv run python scripts/eval_checkpoint.py training\runs\<run_name>\checkpoints\best.pt --episodes 20
-```
+ddw```
