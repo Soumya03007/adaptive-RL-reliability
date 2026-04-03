@@ -1,4 +1,4 @@
----
+<!-- ---
 title: Adaptive RL Reliability
 emoji: chart_with_upwards_trend
 colorFrom: blue
@@ -9,7 +9,7 @@ app_port: 8000
 base_path: /web
 tags:
   - openenv
----
+--- -->
 
 # Adaptive RL Reliability
 
@@ -28,16 +28,17 @@ Many RL examples are games or toy control loops. This repo focuses on a task hum
 ## OpenEnv compliance
 
 This repo now includes the required OpenEnv surface:
-- typed Pydantic models in `openenv_models.py`
+- type-safe contracts in `models.py` with compatibility exports in `openenv_models.py`
 - OpenEnv server in `server/app.py`
-- OpenEnv environment implementation in `server/live_system_environment.py`
+- OpenEnv environment implementation in `server/environment.py`
 - `state` support via `ReliabilityState`
+- optional OpenEnv web UI controlled by `ENABLE_WEB_INTERFACE`
 - manifest in `openenv.yaml`
 
 Local validator status:
 
 ```powershell
-openenv validate .
+uv run openenv validate .
 ```
 
 This passes locally.
@@ -78,9 +79,9 @@ The environment ships with three deterministic grader-backed tasks.
 
 | Task | Difficulty | Objective | Pass target |
 | --- | --- | --- | --- |
-| `balanced` | easy | Hold a routine production service inside standard SLOs under normal load. | full horizon, healthy ratio >= 0.80, score >= 0.78 |
-| `high_traffic` | medium | Absorb a traffic surge without letting latency and errors spiral. | full horizon, healthy ratio >= 0.72, score >= 0.72 |
-| `failure_heavy` | hard | Ride through repeated failure spikes while recovering toward healthy bounds. | full horizon, healthy ratio >= 0.60, score >= 0.66 |
+| `balanced` | easy | Hold a routine production service inside standard SLOs under normal load. | full horizon, healthy ratio >= 0.70, score >= 0.80 |
+| `high_traffic` | medium | Absorb a traffic surge without letting latency and errors spiral. | full horizon, healthy ratio >= 0.60, score >= 0.72 |
+| `failure_heavy` | hard | Ride through repeated failure spikes while recovering toward healthy bounds. | full horizon, healthy ratio >= 0.45, score >= 0.62 |
 
 Task definitions and grader logic live in `openenv_tasks.py`.
 
@@ -117,46 +118,60 @@ The reward breakdown is exposed via the typed `ReliabilityReward` model.
 Relevant files:
 
 - `openenv.yaml`: OpenEnv manifest
-- `openenv_models.py`: typed Action, Observation, Reward, and State models
+- `models.py`: scaffold-facing typed Action, Observation, Reward, and State contracts
+- `openenv_models.py`: compatibility exports for existing imports
 - `openenv_tasks.py`: task definitions and deterministic graders
-- `server/live_system_environment.py`: OpenEnv environment wrapper
+- `server/environment.py`: OpenEnv environment wrapper
 - `server/app.py`: FastAPI app for OpenEnv
-- `scripts/run_hf_baseline.py`: Hugging Face Inference baseline runner
-- `scripts/run_rule_baseline.py`: deterministic local smoke baseline
+- `server/Dockerfile`: structure-aligned container definition
+- `agents/baseline_policy.py`: shared deterministic baseline policy
+- `inference.py`: deterministic submission inference entrypoint
+- `scripts/run_rule_baseline.py`: multi-episode deterministic benchmark runner
+- `scripts/run_hf_baseline.py`: optional remote-model baseline runner
 - `envs/reliability_env.py`: underlying service simulator
 - `scripts/train_torchrl_ppo.py`: existing PPO training pipeline
 
 ## Setup
 
-Install the package:
+Install Python and create the environment:
 
 ```powershell
-pip install -e .
+uv python install 3.12
+uv venv
 ```
 
-Generate the lockfile if needed:
+Install the project:
 
 ```powershell
-python -m uv lock
+uv pip install -e .
 ```
 
 Validate the environment:
 
 ```powershell
-openenv validate .
+uv run openenv validate .
 ```
 
 Run the server locally:
 
 ```powershell
-python -m server.app
+uv run python -m server.app
 ```
 
 Or via the project script:
 
 ```powershell
-python -m uv run server
+uv run server
 ```
+
+Enable the built-in web interface locally:
+
+```powershell
+$env:ENABLE_WEB_INTERFACE="true"
+uv run python -m server.app
+```
+
+When enabled, OpenEnv serves an interactive UI at `/web/`.
 
 ## Docker
 
@@ -176,37 +191,42 @@ Note: the Dockerfile is present and validator-compatible. In this local session 
 
 ## Hugging Face Spaces
 
-This repo is structured for a Docker-based Hugging Face Space and tagged with `openenv` in the README metadata block.
+This repo is structured for a Docker-based Hugging Face Space and tagged with `openenv` in the README metadata block. The repository root already includes:
 
-Typical deployment flow:
+- Space metadata front matter in `README.md`
+- `sdk: docker` in the Space header
+- a root `Dockerfile` for Hugging Face Spaces/OpenEnv builds
+- a mirrored `server/Dockerfile` for scaffold alignment
+- `ENABLE_WEB_INTERFACE=true` in the Docker build so the OpenEnv UI is available on Space deployments
+- a validator-ready `openenv.yaml`
+
+Typical deployment flow with the Hugging Face CLI:
 
 ```powershell
-openenv push
+$env:HF_TOKEN="<your-token>"
+hf auth whoami
+hf repos create <your-username>/adaptive-rl-reliability --type space --space-sdk docker
+hf upload <your-username>/adaptive-rl-reliability . --type space
 ```
 
-Or manually push this repo to a Docker Space on Hugging Face.
+You can also push the same repo through Git if you prefer a standard Space workflow.
 
 ## Baselines
 
 ### Submission inference script
 
-The submission-facing inference entrypoint is the root-level `inference.py`.
+The submission-facing inference entrypoint is the root-level `inference.py`. It is intentionally deterministic and does not rely on a live external model API.
 
-It uses the `openai` Python client, reads the required validator variables, and emits only the structured stdout lines expected by the evaluator:
+It uses the shared rule-based policy in `agents/baseline_policy.py`, reads task and seed configuration from environment variables, and emits only the structured stdout lines expected by the evaluator:
 
 ```powershell
-python inference.py
+uv run python inference.py
 ```
-
-Required environment variables:
-- `API_BASE_URL`
-- `MODEL_NAME`
-- `HF_TOKEN`
 
 Optional environment variables:
 - `TASKS`
 - `BASE_SEED`
-- `REQUEST_TIMEOUT`
+- `MODEL_NAME` (used as the policy label in logs)
 - `INFERENCE_OUTPUT`
 
 ### Deterministic local rule baseline
@@ -214,10 +234,10 @@ Optional environment variables:
 Checked locally with:
 
 ```powershell
-python scripts/run_rule_baseline.py --episodes 5
+uv run python scripts/run_rule_baseline.py --episodes 5
 ```
 
-Observed scores:
+Observed scores with `--seed 42 --episodes 5`:
 
 | Task | Mean score | Min | Max |
 | --- | --- | --- | --- |
@@ -226,14 +246,14 @@ Observed scores:
 | `failure_heavy` | `0.763` | `0.740` | `0.798` |
 | overall | `0.818` | `0.740` | `0.901` |
 
-The JSON artifact is written to `outputs/rule_baseline.json`.
+The runner uses the same policy as `inference.py`, writes a JSON artifact to `outputs/rule_baseline.json`, and is deterministic for a fixed seed.
 
 ### Hugging Face baseline
 
 Use the OpenAI-client baseline against an OpenRouter-hosted instruct model with:
 
 ```powershell
-python scripts/run_hf_baseline.py --episodes 1
+uv run python scripts/run_hf_baseline.py --episodes 1
 ```
 
 Requirements:
@@ -260,11 +280,11 @@ The original TorchRL PPO training code is still available. That makes this repo 
 Train PPO:
 
 ```powershell
-python scripts/train_torchrl_ppo.py --task balanced
+uv run python scripts/train_torchrl_ppo.py --task balanced
 ```
 
 Evaluate a checkpoint:
 
 ```powershell
-python scripts/eval_checkpoint.py training\runs\<run_name>\checkpoints\best.pt --episodes 20
+uv run python scripts/eval_checkpoint.py training\runs\<run_name>\checkpoints\best.pt --episodes 20
 ```

@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, ValidationError
 
 from openenv_models import ActionCommand, ReliabilityAction, ReliabilityObservation
 from openenv_tasks import get_task_definition, list_task_definitions
-from server.live_system_environment import LiveSystemReliabilityEnvironment
+from server.environment import LiveSystemReliabilityEnvironment
 
 
 DEFAULT_MODEL = os.environ.get(

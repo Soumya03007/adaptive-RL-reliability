@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "adaptive-rl-reliability"
-version = "0.1.0"
+version = "0.2.0"
 description = "OpenEnv-compatible reliability control simulator for live-system autoscaling."
 requires-python = ">=3.12"
 dependencies = [
@@ -28,3 +28,16 @@ venvPath = "."
 venv = ".venv"
 include = ["envs", "models", "scripts", "training", "utils", "tests"]
 extraPaths = ["."]
+
+[tool.setuptools]
+packages = [
+    "agents",
+    "configs",
+    "envs",
+    "models",
+    "server",
+    "rl",
+    "training",
+    "utils",
+]
+py-modules = ["client", "inference", "openenv_models", "openenv_tasks"]

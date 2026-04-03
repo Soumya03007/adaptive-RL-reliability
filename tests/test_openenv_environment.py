@@ -1,6 +1,6 @@
 from openenv_models import ReliabilityAction
 from openenv_tasks import get_task_definition
-from server.live_system_environment import LiveSystemReliabilityEnvironment
+from server.environment import LiveSystemReliabilityEnvironment
 
 
 def test_reset_returns_balanced_task_observation():

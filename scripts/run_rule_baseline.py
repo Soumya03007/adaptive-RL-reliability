@@ -5,21 +5,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from agents.baseline_policy import choose_baseline_decision
 from openenv_models import ReliabilityAction
-from openenv_tasks import get_task_definition, list_task_definitions
-from server.live_system_environment import LiveSystemReliabilityEnvironment
-
-
-def choose_rule_action(task_id: str, latency: float, cpu: float, error_rate: float, traffic: float) -> str:
-    task = get_task_definition(task_id)
-    if (
-        traffic < 0.28
-        and latency < task.latency_target * 0.45
-        and cpu < task.cpu_target * 0.45
-        and error_rate < task.error_target * 0.20
-    ):
-        return "no_op"
-    return "scale_up"
+from openenv_tasks import list_task_definitions
+from server.environment import LiveSystemReliabilityEnvironment
 
 
 def run_episode(task_id: str, seed: int) -> dict:
@@ -27,19 +16,22 @@ def run_episode(task_id: str, seed: int) -> dict:
     observation = env.reset(seed=seed, task_id=task_id)
 
     while not observation.done:
-        command = choose_rule_action(
-            task_id,
-            observation.latency,
-            observation.cpu,
-            observation.error_rate,
-            observation.traffic,
+        decision = choose_baseline_decision(
+            task_id=task_id,
+            observation=observation,
         )
-        observation = env.step(ReliabilityAction(command=command, rationale="deterministic-rule"))
+        observation = env.step(
+            ReliabilityAction(
+                command=decision.command,
+                rationale=decision.rationale,
+            )
+        )
 
     state = env.state
     return {
         "task_id": task_id,
         "seed": seed,
+        "policy": "deterministic-rule-v1",
         "score": state.final_grader_score,
         "episode_return": state.episode_return,
         "steps": state.step_count,

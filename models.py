@@ -1,4 +1,4 @@
-"""Compatibility wrapper required by OpenEnv validators."""
+"""Type-safe contracts for the OpenEnv action, observation, reward, and state payloads."""
 
 from openenv_models import (
     ActionCommand,
