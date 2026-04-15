@@ -14,6 +14,17 @@ from openenv_models import (
 )
 from openenv_tasks import GraderResult, get_task_definition, grade_trajectory
 
+# ✅ Prometheus metrics
+from server.metrics import (
+    latency_gauge,
+    cpu_gauge,
+    error_gauge,
+    traffic_gauge,
+    reward_gauge,
+    healthy_ratio_gauge,
+    instance_gauge,
+    action_counter,
+)
 
 ACTION_TO_INDEX = {label: index for index, label in ACTION_LABELS.items()}
 
@@ -47,6 +58,7 @@ class LiveSystemReliabilityEnvironment(
         self._env.reset(seed=seed)
         self._trajectory = []
         self._state = self._build_state(episode_id=episode_id or str(uuid4()))
+
         return self._build_observation(
             reward_breakdown=ReliabilityReward(
                 base_reward=0.0,
@@ -70,25 +82,40 @@ class LiveSystemReliabilityEnvironment(
         action_index = ACTION_TO_INDEX[action.command]
         _, base_reward, simulator_done, info = self._env.step(action_index)
 
-        previous_action = self._state.action_history[-1] if self._state.action_history else None
+        previous_action = (
+            self._state.action_history[-1]
+            if self._state.action_history
+            else None
+        )
+
         self._state.step_count += 1
         self._state.action_history.append(action.command)
+
         if previous_action is not None and previous_action != action.command:
             self._state.action_changes += 1
 
         snapshot = info["metrics"]
+
         health_reward = self._health_reward(snapshot)
         progress_bonus = self._progress_bonus(health_reward)
+
         outage_penalty = (
-            0.35 if simulator_done and self._state.step_count < self._task.max_steps else 0.0
+            0.35
+            if simulator_done and self._state.step_count < self._task.max_steps
+            else 0.0
         )
+
         final_reward = max(
             0.0,
             min(
                 1.0,
-                0.55 * base_reward + 0.35 * health_reward + 0.10 * progress_bonus - outage_penalty,
+                0.55 * base_reward
+                + 0.35 * health_reward
+                + 0.10 * progress_bonus
+                - outage_penalty,
             ),
         )
+
         reward_breakdown = ReliabilityReward(
             base_reward=base_reward,
             health_reward=health_reward,
@@ -101,6 +128,7 @@ class LiveSystemReliabilityEnvironment(
             self._state.healthy_steps += 1
 
         done = simulator_done or self._state.step_count >= self._task.max_steps
+
         terminated_reason = info.get("done_reason")
         if not simulator_done and self._state.step_count >= self._task.max_steps:
             terminated_reason = "max_steps_reached"
@@ -121,6 +149,9 @@ class LiveSystemReliabilityEnvironment(
             max_steps=self._task.max_steps,
         )
 
+        # =========================
+        # ✅ UPDATE STATE
+        # =========================
         self._state.latency = snapshot["latency"]
         self._state.cpu = snapshot["cpu"]
         self._state.error_rate = snapshot["error_rate"]
@@ -130,6 +161,23 @@ class LiveSystemReliabilityEnvironment(
         self._state.final_grader_score = grader_result.score if done else None
         self._state.terminated_reason = terminated_reason if done else None
         self._state.reward_breakdown = reward_breakdown
+
+        # =========================
+        # ✅ PROMETHEUS EXPORT
+        # =========================
+        latency_gauge.set(snapshot["latency"])
+        cpu_gauge.set(snapshot["cpu"])
+        error_gauge.set(snapshot["error_rate"])
+        traffic_gauge.set(snapshot["traffic"])
+
+        reward_gauge.set(final_reward)
+        healthy_ratio_gauge.set(grader_result.healthy_ratio)
+
+        # proxy for autoscaling replica count
+        estimated_instances = max(1, int(snapshot["traffic"] // 100))
+        instance_gauge.set(estimated_instances)
+
+        action_counter.labels(action=action.command).inc()
 
         return self._build_observation(
             reward_breakdown=reward_breakdown,
@@ -148,11 +196,12 @@ class LiveSystemReliabilityEnvironment(
             description=(
                 "A real-world autoscaling simulator for reliability-aware control of a live service."
             ),
-            version="0.2.0",
+            version="0.3.0",
         )
 
     def _build_state(self, episode_id: str) -> ReliabilityState:
         snapshot = self._env.snapshot()
+
         return ReliabilityState(
             episode_id=episode_id,
             step_count=0,
@@ -183,7 +232,13 @@ class LiveSystemReliabilityEnvironment(
         terminated_reason: str | None = None,
     ) -> ReliabilityObservation:
         snapshot = self._env.snapshot()
-        last_action = self._state.action_history[-1] if self._state.action_history else None
+
+        last_action = (
+            self._state.action_history[-1]
+            if self._state.action_history
+            else None
+        )
+
         return ReliabilityObservation(
             task_id=self._task.id,
             task_title=self._task.title,
@@ -194,7 +249,10 @@ class LiveSystemReliabilityEnvironment(
             error_rate=snapshot["error_rate"],
             traffic=snapshot["traffic"],
             step_count=self._state.step_count,
-            remaining_steps=max(self._task.max_steps - self._state.step_count, 0),
+            remaining_steps=max(
+                self._task.max_steps - self._state.step_count,
+                0,
+            ),
             healthy_steps=self._state.healthy_steps,
             healthy_ratio=grader_result.healthy_ratio,
             current_grader_score=grader_result.score,
