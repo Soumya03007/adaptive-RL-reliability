@@ -15,6 +15,7 @@ class ReliabilityEnv:
     def __init__(self, config):
         self.cfg = config
         self.rng = random.Random()
+
         reward_cfg = self.cfg["reward"]
         self.max_penalty = (
             reward_cfg["latency_weight"] * 2.0
@@ -23,8 +24,10 @@ class ReliabilityEnv:
             + reward_cfg.get("scale_action_weight", 0.0)
             + reward_cfg.get("action_change_weight", 0.0)
         )
+
         self.last_reward_breakdown: dict[str, float] = {}
         self.last_info: dict[str, Any] = {}
+
         self.reset()
 
     def seed(self, seed=None):
@@ -39,8 +42,10 @@ class ReliabilityEnv:
         self.cpu = self.rng.uniform(0.3, 0.6)
         self.error_rate = self.rng.uniform(0.0, 0.1)
         self.traffic = self.rng.uniform(*self.cfg["traffic"]["base"])
+
         self.last_action = None
         self.last_reward_breakdown = {"penalty": 0.0, "reward": 0.0}
+
         self.last_info = {
             "metrics": self.snapshot(),
             "action": None,
@@ -48,10 +53,12 @@ class ReliabilityEnv:
             "reward_breakdown": dict(self.last_reward_breakdown),
             "done_reason": None,
         }
+
         return self._get_obs()
 
     def step(self, action):
         previous_action = self.last_action
+
         self._apply_action(action)
         self._apply_traffic()
         self._apply_noise()
@@ -59,8 +66,17 @@ class ReliabilityEnv:
         self._apply_recovery(action)
         self._clamp_state()
 
-        reward, reward_breakdown = self._compute_reward(action, previous_action)
-        done = self.latency >= 2.0 or self.cpu >= 2.0 or self.error_rate >= 1.0
+        reward, reward_breakdown = self._compute_reward(
+            action,
+            previous_action,
+        )
+
+        done = (
+            self.latency >= 2.0
+            or self.cpu >= 2.0
+            or self.error_rate >= 1.0
+        )
+
         self.last_action = action
 
         info = {
@@ -74,8 +90,10 @@ class ReliabilityEnv:
             "reward_breakdown": reward_breakdown,
             "done_reason": self._done_reason(done),
         }
+
         self.last_reward_breakdown = reward_breakdown
         self.last_info = info
+
         return self._get_obs(), reward, done, info
 
     # -----------------------------
@@ -88,24 +106,49 @@ class ReliabilityEnv:
         if action == 2:  # scale up
             self.latency *= self.rng.uniform(*dyn["latency_scale_up"])
             self.cpu *= self.rng.uniform(*dyn["cpu_scale_up"])
+
         elif action == 0:  # scale down
             self.latency *= self.rng.uniform(*dyn["latency_scale_down"])
             self.cpu *= self.rng.uniform(*dyn["cpu_scale_down"])
 
-        # action == 1 means no-op
-
     def _apply_traffic(self):
+        """
+        Enhanced workload realism:
+        traffic now causes non-linear latency + CPU stress
+        so Locust spikes look dramatic in Grafana.
+        """
         vol = self.cfg["traffic"]["volatility"]
+
+        # baseline traffic evolution
         self.traffic *= self.rng.uniform(*vol)
+
         base_low, base_high = self.cfg["traffic"]["base"]
         base_mid = (base_low + base_high) / 2.0
+
         reversion = self.cfg["traffic"].get("reversion", 0.0)
         if reversion:
-            self.traffic = (1 - reversion) * self.traffic + reversion * base_mid
+            self.traffic = (
+                (1 - reversion) * self.traffic
+                + reversion * base_mid
+            )
 
-        # Traffic pressure affects both latency and CPU.
-        self.latency *= 1 + 0.5 * self.traffic
-        self.cpu *= 1 + 0.7 * self.traffic
+        # 🔥 additional burstiness for Locust realism
+        burst_factor = self.rng.uniform(0.9, 1.25)
+        self.traffic *= burst_factor
+
+        # 🔥 non-linear traffic pressure
+        pressure = self.traffic ** 1.4
+
+        # stronger latency sensitivity
+        self.latency *= 1 + 0.8 * pressure
+
+        # stronger CPU saturation curve
+        self.cpu *= 1 + 0.9 * pressure
+
+        # overload creates errors
+        if self.traffic > 1.0:
+            overload = self.traffic - 1.0
+            self.error_rate += overload * 0.08
 
     def _apply_noise(self):
         noise = self.cfg["dynamics"]["noise"]
@@ -126,17 +169,27 @@ class ReliabilityEnv:
         if not recovery:
             return
 
-        self.latency *= self.rng.uniform(*recovery.get("latency_decay", [1.0, 1.0]))
-        self.cpu *= self.rng.uniform(*recovery.get("cpu_decay", [1.0, 1.0]))
+        self.latency *= self.rng.uniform(
+            *recovery.get("latency_decay", [1.0, 1.0])
+        )
+
+        self.cpu *= self.rng.uniform(
+            *recovery.get("cpu_decay", [1.0, 1.0])
+        )
+
         self.error_rate = max(
             0.0,
-            self.error_rate - self.rng.uniform(*recovery.get("error_decay", [0.0, 0.0])),
+            self.error_rate
+            - self.rng.uniform(
+                *recovery.get("error_decay", [0.0, 0.0])
+            ),
         )
 
         if action == 2:
             self.error_rate *= self.rng.uniform(
                 *recovery.get("scale_up_error_multiplier", [1.0, 1.0])
             )
+
         elif action == 0:
             self.error_rate *= self.rng.uniform(
                 *recovery.get("scale_down_error_multiplier", [1.0, 1.0])
@@ -158,6 +211,7 @@ class ReliabilityEnv:
         latency_penalty = r_cfg["latency_weight"] * self.latency
         error_penalty = r_cfg["error_weight"] * self.error_rate
         cpu_penalty = r_cfg["cpu_weight"] * self.cpu
+
         penalty = latency_penalty + error_penalty + cpu_penalty
 
         scale_penalty = 0.0
@@ -167,10 +221,16 @@ class ReliabilityEnv:
 
         action_change_penalty = 0.0
         if previous_action is not None and action != previous_action:
-            action_change_penalty = r_cfg.get("action_change_weight", 0.0)
+            action_change_penalty = r_cfg.get(
+                "action_change_weight",
+                0.0,
+            )
             penalty += action_change_penalty
 
-        reward = float(np.clip(1.0 - (penalty / self.max_penalty), 0.0, 1.0))
+        reward = float(
+            np.clip(1.0 - (penalty / self.max_penalty), 0.0, 1.0)
+        )
+
         return reward, {
             "latency_penalty": float(latency_penalty),
             "error_penalty": float(error_penalty),
